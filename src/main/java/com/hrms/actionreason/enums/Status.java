@@ -3,8 +3,9 @@ package com.hrms.actionreason.enums;
 public enum Status {
 
     DRAFT,
-    SUBMITTED,
-    APPROVED,
+    PENDING_APPROVAL,
+    ACTIVE,
+    SENT_BACK,
     REJECTED,
     INACTIVE
 

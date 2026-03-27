@@ -2,13 +2,26 @@ package com.hrms.actionreason.controller;
 
 import com.hrms.actionreason.dto.ApiResponse;
 import com.hrms.actionreason.dto.ApproveRequest;
+import com.hrms.actionreason.dto.CheckerActionRequest;
+import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
+import com.hrms.actionreason.dto.HistoryRequest;
+import com.hrms.actionreason.dto.InactivateActionReasonRequest;
 import com.hrms.actionreason.dto.SearchRequest;
+import com.hrms.actionreason.dto.SubmitActionReasonRequest;
 import com.hrms.actionreason.dto.UpdateActionReasonRequest;
 import com.hrms.actionreason.service.ActionReasonService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v4/action-reasons")
@@ -17,97 +30,100 @@ public class ActionReasonController {
 
     private final ActionReasonService service;
 
-
-    // CREATE
     @PostMapping
-    public ResponseEntity<ApiResponse> create(
-            @RequestBody CreateActionReasonRequest request) {
-
-        service.create(request);
-
-        return ResponseEntity.ok(
-                new ApiResponse("Action Reason Created Successfully")
-        );
+    public ResponseEntity<ApiResponse<?>> create(@Valid @RequestBody CreateActionReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason created successfully",
+                service.create(request)));
     }
 
-
-    // UPDATE
-    @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse> update(
-            @PathVariable Long id,
-            @RequestBody UpdateActionReasonRequest request) {
-
-        service.update(id, request);
-
-        return ResponseEntity.ok(
-                new ApiResponse("Action Reason Updated Successfully")
-        );
+    @PutMapping
+    public ResponseEntity<ApiResponse<?>> update(@Valid @RequestBody UpdateActionReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason updated successfully",
+                service.update(request)));
     }
 
-
-    // SUBMIT
-    @PostMapping("/{id}/submit")
-    public ResponseEntity<ApiResponse> submit(@PathVariable Long id) {
-
-        service.submit(id);
-
-        return ResponseEntity.ok(
-                new ApiResponse("Action Reason Submitted Successfully")
-        );
+    @PostMapping("/submit")
+    public ResponseEntity<ApiResponse<?>> submit(@Valid @RequestBody SubmitActionReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason submitted successfully",
+                service.submit(request)));
     }
 
-
-    // APPROVE
-    @PostMapping("/{id}/approve")
-    public ResponseEntity<ApiResponse> approve(
-            @PathVariable Long id,
-            @RequestBody ApproveRequest request) {
-
-        service.approve(id, request);
-
-        return ResponseEntity.ok(
-                new ApiResponse("Action Reason Approved Successfully")
-        );
+    @PostMapping("/claim")
+    public ResponseEntity<ApiResponse<?>> claim(@Valid @RequestBody ClaimRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason claimed successfully",
+                service.claim(request)));
     }
 
-
-    // REJECT
-    @PostMapping("/{id}/reject")
-    public ResponseEntity<ApiResponse> reject(@PathVariable Long id) {
-
-        service.reject(id);
-
-        return ResponseEntity.ok(
-                new ApiResponse("Action Reason Rejected Successfully")
-        );
+    @PostMapping("/approve")
+    public ResponseEntity<ApiResponse<?>> approve(@Valid @RequestBody ApproveRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason approved successfully",
+                service.approve(request)));
     }
 
-
-    // INACTIVATE
-    @PostMapping("/{id}/inactivate")
-    public ResponseEntity<ApiResponse> inactivate(@PathVariable Long id) {
-
-        service.inactivate(id);
-
-        return ResponseEntity.ok(
-                new ApiResponse("Action Reason Inactivated Successfully")
-        );
+    @PostMapping("/reject")
+    public ResponseEntity<ApiResponse<?>> reject(@Valid @RequestBody CheckerActionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason rejected successfully",
+                service.reject(request)));
     }
 
+    @PostMapping("/send-back")
+    public ResponseEntity<ApiResponse<?>> sendBack(@Valid @RequestBody CheckerActionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason sent back successfully",
+                service.sendBack(request)));
+    }
 
-    // SEARCH
+    @PostMapping("/inactivate")
+    public ResponseEntity<ApiResponse<?>> inactivate(@Valid @RequestBody InactivateActionReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason inactivated successfully",
+                service.inactivate(request)));
+    }
+
     @PostMapping("/search")
-    public ResponseEntity<?> search(@RequestBody SearchRequest request) {
-
-        return ResponseEntity.ok(service.search(request));
+    public ResponseEntity<ApiResponse<?>> search(@RequestBody SearchRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason search fetched successfully",
+                service.search(request)));
     }
 
+    @PostMapping("/history")
+    public ResponseEntity<ApiResponse<?>> history(@Valid @RequestBody HistoryRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason history fetched successfully",
+                service.history(request)));
+    }
 
-    // HISTORY
-    @GetMapping("/{id}/history")
-    public ResponseEntity<?> history(@PathVariable Long id) {
+    @GetMapping("/tray")
+    public ResponseEntity<ApiResponse<?>> tray(@RequestParam String checkerId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason tray fetched successfully",
+                service.tray(checkerId)));
+    }
 
-        return ResponseEntity.ok(service.history(id));
+    @GetMapping("/health")
+    public ResponseEntity<ApiResponse<?>> health() {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Manage Action Reasons backend is up",
+                null));
     }
 
 }

@@ -1,8 +1,13 @@
 package com.hrms.actionreason.entity;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
+import com.hrms.actionreason.enums.HistoryActionType;
+import com.hrms.actionreason.enums.Status;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -38,6 +43,8 @@ public class ActionReasonHistory {
 
     private String moduleMaster;
 
+    private String linkedActions;
+
     private Integer version;
 
     private LocalDate creationDate;
@@ -46,6 +53,8 @@ public class ActionReasonHistory {
 
     private String checkedBy;
 
+    private LocalDate checkedDate;
+
     private LocalDate modifiedDate;
 
     private String modifiedBy;
@@ -53,5 +62,21 @@ public class ActionReasonHistory {
     private LocalDate effectiveStartDate;
 
     private LocalDate effectiveEndDate;
+
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    @Enumerated(EnumType.STRING)
+    private HistoryActionType actionType;
+
+    private String remarks;
+
+    private String checkerRemarks;
+
+    private String makerReplyRemarks;
+
+    private String actorId;
+
+    private LocalDateTime actionedAt;
 
 }

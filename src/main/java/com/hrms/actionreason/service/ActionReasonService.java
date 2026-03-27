@@ -1,25 +1,41 @@
 package com.hrms.actionreason.service;
 
-import com.hrms.actionreason.dto.*;
-
 import java.util.List;
+
+import com.hrms.actionreason.dto.ActionReasonResponse;
+import com.hrms.actionreason.dto.ApproveRequest;
+import com.hrms.actionreason.dto.CheckerActionRequest;
+import com.hrms.actionreason.dto.ClaimRequest;
+import com.hrms.actionreason.dto.CreateActionReasonRequest;
+import com.hrms.actionreason.dto.HistoryRequest;
+import com.hrms.actionreason.dto.InactivateActionReasonRequest;
+import com.hrms.actionreason.dto.SearchRequest;
+import com.hrms.actionreason.dto.SubmitActionReasonRequest;
+import com.hrms.actionreason.dto.TrayResponse;
+import com.hrms.actionreason.dto.UpdateActionReasonRequest;
 
 public interface ActionReasonService {
 
-    void create(CreateActionReasonRequest request);
+    ActionReasonResponse create(CreateActionReasonRequest request);
 
-    void update(Long id, UpdateActionReasonRequest request);
+    ActionReasonResponse update(UpdateActionReasonRequest request);
 
-    void submit(Long id);
+    ActionReasonResponse submit(SubmitActionReasonRequest request);
 
-    void approve(Long id, ApproveRequest request);
+    ActionReasonResponse claim(ClaimRequest request);
 
-    void reject(Long id);
+    ActionReasonResponse approve(ApproveRequest request);
 
-    void inactivate(Long id);
+    ActionReasonResponse reject(CheckerActionRequest request);
 
-    List<?> search(SearchRequest request);
+    ActionReasonResponse sendBack(CheckerActionRequest request);
 
-    List<?> history(Long id);
+    ActionReasonResponse inactivate(InactivateActionReasonRequest request);
+
+    List<ActionReasonResponse> search(SearchRequest request);
+
+    List<?> history(HistoryRequest request);
+
+    List<TrayResponse> tray(String checkerId);
 
 }

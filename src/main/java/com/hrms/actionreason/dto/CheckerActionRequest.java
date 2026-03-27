@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class ApproveRequest {
+public class CheckerActionRequest {
 
     @NotNull
     private Long actionReasonId;
@@ -13,6 +13,9 @@ public class ApproveRequest {
     @NotBlank
     private String checkerId;
 
+    @NotBlank
     private String remarks;
+
+    private String attachmentReference;
 
 }

@@ -11,4 +11,10 @@ public class SearchRequest {
 
     private String operator;
 
+    private String status;
+
+    private Long moduleId;
+
+    private Long moduleMasterId;
+
 }

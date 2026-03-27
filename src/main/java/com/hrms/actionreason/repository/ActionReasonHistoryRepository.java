@@ -8,6 +8,8 @@ import java.util.List;
 public interface ActionReasonHistoryRepository
         extends JpaRepository<ActionReasonHistory, Long> {
 
-    List<ActionReasonHistory> findByActionReasonId(Long id);
+    List<ActionReasonHistory> findByActionReasonIdOrderByVersionDescIdDesc(Long id);
+
+    List<ActionReasonHistory> findByActionReasonIdInOrderByVersionDescIdDesc(List<Long> ids);
 
 }

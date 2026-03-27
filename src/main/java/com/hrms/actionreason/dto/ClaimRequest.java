@@ -5,14 +5,12 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class ApproveRequest {
+public class ClaimRequest {
 
     @NotNull
     private Long actionReasonId;
 
     @NotBlank
     private String checkerId;
-
-    private String remarks;
 
 }
