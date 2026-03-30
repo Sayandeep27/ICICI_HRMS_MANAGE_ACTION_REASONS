@@ -8,7 +8,10 @@ import lombok.Data;
 public class ClaimRequest {
 
     @NotNull
-    private Long actionReasonId;
+    private Long tenantId;
+
+    @NotBlank
+    private String actionReasonCode;
 
     @NotBlank
     private String checkerId;

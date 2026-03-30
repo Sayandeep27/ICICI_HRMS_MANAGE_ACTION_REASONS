@@ -9,10 +9,12 @@ import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
 import com.hrms.actionreason.dto.HistoryRequest;
 import com.hrms.actionreason.dto.InactivateActionReasonRequest;
+import com.hrms.actionreason.dto.PushBackRequest;
 import com.hrms.actionreason.dto.SearchRequest;
 import com.hrms.actionreason.dto.SubmitActionReasonRequest;
 import com.hrms.actionreason.dto.TrayResponse;
 import com.hrms.actionreason.dto.UpdateActionReasonRequest;
+import com.hrms.actionreason.dto.ViewRequest;
 
 public interface ActionReasonService {
 
@@ -28,11 +30,15 @@ public interface ActionReasonService {
 
     ActionReasonResponse reject(CheckerActionRequest request);
 
-    ActionReasonResponse sendBack(CheckerActionRequest request);
+    ActionReasonResponse sendBack(PushBackRequest request);
 
     ActionReasonResponse inactivate(InactivateActionReasonRequest request);
 
     List<ActionReasonResponse> search(SearchRequest request);
+
+    List<ActionReasonResponse> makerView(ViewRequest request);
+
+    List<ActionReasonResponse> checkerView(ViewRequest request);
 
     List<?> history(HistoryRequest request);
 

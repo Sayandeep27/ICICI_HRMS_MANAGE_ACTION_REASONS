@@ -7,9 +7,11 @@ import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
 import com.hrms.actionreason.dto.HistoryRequest;
 import com.hrms.actionreason.dto.InactivateActionReasonRequest;
+import com.hrms.actionreason.dto.PushBackRequest;
 import com.hrms.actionreason.dto.SearchRequest;
 import com.hrms.actionreason.dto.SubmitActionReasonRequest;
 import com.hrms.actionreason.dto.UpdateActionReasonRequest;
+import com.hrms.actionreason.dto.ViewRequest;
 import com.hrms.actionreason.service.ActionReasonService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +26,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v4/action-reasons")
+@RequestMapping({"/api/v4/action-reasons", "/api/v1/action-reasons"})
 @RequiredArgsConstructor
 public class ActionReasonController {
 
     private final ActionReasonService service;
 
-    @PostMapping
+    @PostMapping({"", "/create"})
     public ResponseEntity<ApiResponse<?>> create(@Valid @RequestBody CreateActionReasonRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 HttpStatus.OK,
@@ -78,8 +80,8 @@ public class ActionReasonController {
                 service.reject(request)));
     }
 
-    @PostMapping("/send-back")
-    public ResponseEntity<ApiResponse<?>> sendBack(@Valid @RequestBody CheckerActionRequest request) {
+    @PostMapping({"/send-back", "/push-back"})
+    public ResponseEntity<ApiResponse<?>> sendBack(@Valid @RequestBody PushBackRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 HttpStatus.OK,
                 "Action Reason sent back successfully",
@@ -100,6 +102,22 @@ public class ActionReasonController {
                 HttpStatus.OK,
                 "Action Reason search fetched successfully",
                 service.search(request)));
+    }
+
+    @PostMapping("/maker-view")
+    public ResponseEntity<ApiResponse<?>> makerView(@RequestBody ViewRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason maker view fetched successfully",
+                service.makerView(request)));
+    }
+
+    @PostMapping("/checker-view")
+    public ResponseEntity<ApiResponse<?>> checkerView(@RequestBody ViewRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason checker view fetched successfully",
+                service.checkerView(request)));
     }
 
     @PostMapping("/history")

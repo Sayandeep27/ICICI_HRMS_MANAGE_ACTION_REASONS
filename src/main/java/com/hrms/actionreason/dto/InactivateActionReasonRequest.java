@@ -8,9 +8,14 @@ import lombok.Data;
 public class InactivateActionReasonRequest {
 
     @NotNull
-    private Long actionReasonId;
+    private Long tenantId;
 
     @NotBlank
-    private String actorId;
+    private String actionReasonCode;
+
+    @NotBlank
+    private String makerId;
+
+    private String remarks;
 
 }

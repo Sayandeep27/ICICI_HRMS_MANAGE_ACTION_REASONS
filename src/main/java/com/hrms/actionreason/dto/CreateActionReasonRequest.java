@@ -1,8 +1,6 @@
 package com.hrms.actionreason.dto;
 
 import java.time.LocalDate;
-import java.util.List;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -11,6 +9,13 @@ import lombok.Data;
 
 @Data
 public class CreateActionReasonRequest {
+
+    @NotNull
+    private Long tenantId;
+
+    @NotBlank
+    @Size(max = 20)
+    private String actionReasonCode;
 
     @NotBlank
     @Size(max = 20)
@@ -21,22 +26,26 @@ public class CreateActionReasonRequest {
     @Size(max = 40)
     private String description;
 
-    @NotNull
-    private Long moduleId;
+    @NotBlank
+    @Size(max = 40)
+    private String module;
 
-    private Long moduleMasterId;
+    @Size(max = 40)
+    private String moduleMaster;
 
-    @NotNull
+    @jakarta.validation.constraints.NotNull
     private LocalDate effectiveStartDate;
 
-    private List<@Size(max = 30) String> linkedActions;
+    private String linkedAction;
 
     private Boolean linkedToActivePosition;
 
     @Size(max = 100)
     private String remarks;
 
+    private Boolean submit;
+
     @NotBlank
-    private String createdBy;
+    private String makerId;
 
 }

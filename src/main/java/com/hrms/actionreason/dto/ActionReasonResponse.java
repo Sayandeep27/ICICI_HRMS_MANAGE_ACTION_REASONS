@@ -1,7 +1,6 @@
 package com.hrms.actionreason.dto;
 
 import java.time.LocalDate;
-import java.util.List;
 
 import com.hrms.actionreason.enums.Status;
 import lombok.Builder;
@@ -11,21 +10,27 @@ import lombok.Data;
 @Builder
 public class ActionReasonResponse {
 
-    private Long id;
-    private Long actionReasonRefId;
+    private Long tenantId;
+    private Long pkId;
+    private ActionReasonVersionId id;
     private String actionReasonName;
-    private String actionReasonCode;
     private String description;
     private String module;
     private String moduleMaster;
-    private LocalDate effectiveStartDate;
-    private LocalDate effectiveEndDate;
-    private List<String> linkedActions;
-    private Status status;
-    private Integer version;
+    private String linkedAction;
+    private boolean status;
+    private Status workflowStatus;
+    private LocalDate effectiveFrom;
+    private LocalDate effectiveTo;
     private String createdBy;
-    private String modifiedBy;
+    private LocalDate createdDate;
+    private String updatedBy;
+    private LocalDate updatedDate;
     private String checkedBy;
-    private String currentAssignee;
+    private LocalDate checkedDate;
+    private String claimedBy;
+    private java.time.LocalDateTime claimedAt;
+    private String remarks;
+    private String checkerRemarks;
 
 }

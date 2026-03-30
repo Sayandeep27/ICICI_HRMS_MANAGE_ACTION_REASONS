@@ -19,6 +19,14 @@ public interface ActionReasonRepository
 
     Optional<ActionReason> findByActionReasonCodeIgnoreCase(String code);
 
+    Optional<ActionReason> findByActionReasonCodeIgnoreCaseAndVersion(String code, Integer version);
+
+    List<ActionReason> findByActionReasonCodeIgnoreCaseOrderByVersionDesc(String code);
+
+    Optional<ActionReason> findTopByActionReasonCodeIgnoreCaseAndStatusOrderByVersionDesc(
+            String code,
+            com.hrms.actionreason.enums.Status status);
+
     boolean existsByActionReasonNameIgnoreCase(String name);
 
     boolean existsByActionReasonCodeIgnoreCase(String code);

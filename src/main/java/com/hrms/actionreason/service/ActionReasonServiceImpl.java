@@ -9,16 +9,19 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.hrms.actionreason.dto.ActionReasonResponse;
+import com.hrms.actionreason.dto.ActionReasonVersionId;
 import com.hrms.actionreason.dto.ApproveRequest;
 import com.hrms.actionreason.dto.CheckerActionRequest;
 import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
 import com.hrms.actionreason.dto.HistoryRequest;
 import com.hrms.actionreason.dto.InactivateActionReasonRequest;
+import com.hrms.actionreason.dto.PushBackRequest;
 import com.hrms.actionreason.dto.SearchRequest;
 import com.hrms.actionreason.dto.SubmitActionReasonRequest;
 import com.hrms.actionreason.dto.TrayResponse;
 import com.hrms.actionreason.dto.UpdateActionReasonRequest;
+import com.hrms.actionreason.dto.ViewRequest;
 import com.hrms.actionreason.entity.ActionReason;
 import com.hrms.actionreason.entity.ActionReasonHistory;
 import com.hrms.actionreason.entity.ActionReasonTray;
@@ -56,23 +59,24 @@ public class ActionReasonServiceImpl implements ActionReasonService {
         String normalizedName = normalizeName(request.getActionReasonName());
         validateUniqueName(normalizedName, null);
 
-        String generatedCode = CodeGeneratorUtil.generateCode(normalizedName);
-        validateUniqueCode(generatedCode, null);
+        String normalizedCode = CodeGeneratorUtil.generateCode(request.getActionReasonCode());
+        validateUniqueCode(normalizedCode, null);
 
         ActionReason actionReason = ActionReason.builder()
+                .tenantId(request.getTenantId())
                 .actionReasonName(normalizedName)
-                .actionReasonCode(generatedCode)
+                .actionReasonCode(normalizedCode)
                 .description(normalizeDescription(request.getDescription()))
-                .module(findModule(request.getModuleId()))
-                .moduleMaster(findModuleMaster(request.getModuleMasterId()))
+                .module(findModule(request.getModule()))
+                .moduleMaster(findModuleMaster(request.getModuleMaster()))
                 .effectiveStartDate(request.getEffectiveStartDate())
                 .effectiveEndDate(null)
-                .linkedActions(normalizeLinkedActions(request.getLinkedActions()))
+                .linkedActions(parseSingleValue(request.getLinkedAction()))
                 .remarks(trimToNull(request.getRemarks()))
                 .status(Status.DRAFT)
                 .version(1)
                 .creationDate(LocalDate.now())
-                .createdBy(request.getCreatedBy().trim())
+                .createdBy(request.getMakerId().trim())
                 .linkedToActivePosition(Boolean.TRUE.equals(request.getLinkedToActivePosition()))
                 .makerReplyRequired(false)
                 .build();
@@ -83,17 +87,23 @@ public class ActionReasonServiceImpl implements ActionReasonService {
             saved = actionReasonRepository.save(saved);
         }
         saveHistory(saved, HistoryActionType.CREATED, saved.getCreatedBy());
+        if (Boolean.TRUE.equals(request.getSubmit())) {
+            saved = submitFromBody(saved, request.getMakerId().trim(), request.getRemarks());
+        }
         return toResponse(saved);
     }
 
     @Override
     public ActionReasonResponse update(UpdateActionReasonRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestByCode(request.getActionReasonCode());
 
         if (actionReason.getStatus() == Status.ACTIVE) {
             ActionReason draftVersion = buildNextDraftVersion(actionReason, request);
             ActionReason saved = actionReasonRepository.save(draftVersion);
             saveHistory(saved, HistoryActionType.UPDATED, saved.getModifiedBy());
+            if (Boolean.TRUE.equals(request.getSubmit())) {
+                saved = submitFromBody(saved, saved.getModifiedBy(), request.getRemarks());
+            }
             return toResponse(saved);
         }
 
@@ -105,12 +115,18 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
         ActionReason saved = actionReasonRepository.save(actionReason);
         saveHistory(saved, HistoryActionType.UPDATED, saved.getModifiedBy());
+        if (Boolean.TRUE.equals(request.getSubmit())) {
+            saved = submitFromBody(
+                    saved,
+                    trimToNull(request.getMakerId()),
+                    request.getRemarks());
+        }
         return toResponse(saved);
     }
 
     @Override
     public ActionReasonResponse submit(SubmitActionReasonRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestSubmittableByCode(request.getActionReasonCode());
         if (!(actionReason.getStatus() == Status.DRAFT
                 || actionReason.getStatus() == Status.SENT_BACK
                 || actionReason.getStatus() == Status.REJECTED)) {
@@ -128,29 +144,69 @@ public class ActionReasonServiceImpl implements ActionReasonService {
         actionReason.setModifiedBy(request.getMakerId().trim());
         actionReason.setModifiedDate(LocalDate.now());
 
-        clearTray(actionReason.getId());
-        createTrayEntries(actionReason, request.getCheckerIds());
-
         ActionReason saved = actionReasonRepository.save(actionReason);
         saveHistory(saved, HistoryActionType.SUBMITTED, request.getMakerId().trim());
         return toResponse(saved);
     }
 
+    private ActionReason submitFromBody(
+            ActionReason actionReason,
+            String makerId,
+            String remarks) {
+
+        if (isBlank(makerId)) {
+            throw new ResourceException("Maker id is required when submit is true");
+        }
+
+        if (!(actionReason.getStatus() == Status.DRAFT
+                || actionReason.getStatus() == Status.SENT_BACK
+                || actionReason.getStatus() == Status.REJECTED)) {
+            throw new ResourceException("Only draft, sent back or rejected records can be submitted");
+        }
+
+        if (actionReason.getMakerReplyRequired() && isBlank(remarks)) {
+            throw new ResourceException("Maker remarks are mandatory after checker sends back remarks");
+        }
+
+        actionReason.setStatus(Status.PENDING_APPROVAL);
+        actionReason.setCurrentAssignee(null);
+        actionReason.setMakerReplyRemarks(trimToNull(remarks));
+        actionReason.setMakerReplyRequired(false);
+        actionReason.setModifiedBy(makerId.trim());
+        actionReason.setModifiedDate(LocalDate.now());
+
+        ActionReason saved = actionReasonRepository.save(actionReason);
+        saveHistory(saved, HistoryActionType.SUBMITTED, makerId.trim());
+        return saved;
+    }
+
     @Override
     public ActionReasonResponse claim(ClaimRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestPendingByCode(request.getActionReasonCode());
         if (actionReason.getStatus() != Status.PENDING_APPROVAL) {
             throw new ResourceException("Only pending approval records can be claimed");
         }
-
-        ActionReasonTray claimantTray = trayRepository.findByActionReasonIdAndCheckerId(actionReason.getId(), request.getCheckerId().trim())
-                .orElseThrow(() -> new ResourceException("No tray assignment found for checker"));
-
-        if (claimantTray.getStatus() == TrayStatus.COMPLETED) {
-            throw new ResourceException("Completed tray item cannot be claimed");
+        if (!isBlank(actionReason.getCurrentAssignee())
+                && !request.getCheckerId().trim().equalsIgnoreCase(actionReason.getCurrentAssignee())) {
+            throw new ResourceException("Action Reason is already claimed by another checker");
         }
 
+        ActionReasonTray claimantTray = trayRepository.findByActionReasonIdAndCheckerId(actionReason.getId(), request.getCheckerId().trim())
+                .orElse(ActionReasonTray.builder()
+                        .actionReasonId(actionReason.getId())
+                        .checkerId(request.getCheckerId().trim())
+                        .moduleName(actionReason.getModule() != null
+                                ? actionReason.getModule().getModuleName()
+                                : null)
+                        .assignedAt(LocalDateTime.now())
+                        .status(TrayStatus.PENDING)
+                        .build());
+
         List<ActionReasonTray> trayEntries = trayRepository.findByActionReasonId(actionReason.getId());
+        if (trayEntries.stream().noneMatch(tray -> Objects.equals(tray.getCheckerId(), request.getCheckerId().trim()))) {
+            trayEntries = new ArrayList<>(trayEntries);
+            trayEntries.add(claimantTray);
+        }
         for (ActionReasonTray tray : trayEntries) {
             if (Objects.equals(tray.getCheckerId(), request.getCheckerId().trim())) {
                 tray.setStatus(TrayStatus.CLAIMED);
@@ -169,10 +225,10 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     @Override
     public ActionReasonResponse approve(ApproveRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestPendingByCode(request.getActionReasonCode());
         ensureCheckerOwnership(actionReason, request.getCheckerId());
 
-        activateApprovedVersion(actionReason, request.getCheckerId().trim(), trimToNull(request.getRemarks()));
+        activateApprovedVersion(actionReason, request.getCheckerId().trim(), trimToNull(request.getCheckerRemarks()));
         markTrayCompleted(actionReason.getId());
 
         ActionReason saved = actionReasonRepository.save(actionReason);
@@ -182,13 +238,13 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     @Override
     public ActionReasonResponse reject(CheckerActionRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestPendingByCode(request.getActionReasonCode());
         ensureCheckerOwnership(actionReason, request.getCheckerId());
 
         actionReason.setStatus(Status.REJECTED);
         actionReason.setCheckedBy(request.getCheckerId().trim());
         actionReason.setCheckedDate(LocalDate.now());
-        actionReason.setCheckerRemarks(request.getRemarks().trim());
+        actionReason.setCheckerRemarks(request.getCheckerRemarks().trim());
         actionReason.setCurrentAssignee(null);
         actionReason.setMakerReplyRequired(false);
 
@@ -200,14 +256,14 @@ public class ActionReasonServiceImpl implements ActionReasonService {
     }
 
     @Override
-    public ActionReasonResponse sendBack(CheckerActionRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+    public ActionReasonResponse sendBack(PushBackRequest request) {
+        ActionReason actionReason = getLatestPendingByCode(request.getActionReasonCode());
         ensureCheckerOwnership(actionReason, request.getCheckerId());
 
         actionReason.setStatus(Status.SENT_BACK);
         actionReason.setCheckedBy(request.getCheckerId().trim());
         actionReason.setCheckedDate(LocalDate.now());
-        actionReason.setCheckerRemarks(request.getRemarks().trim());
+        actionReason.setCheckerRemarks(request.getCheckerRemarks().trim());
         actionReason.setCurrentAssignee(actionReason.getCreatedBy());
         actionReason.setMakerReplyRequired(true);
 
@@ -220,7 +276,7 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     @Override
     public ActionReasonResponse inactivate(InactivateActionReasonRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestActiveByCode(request.getActionReasonCode());
         if (actionReason.getStatus() != Status.ACTIVE) {
             throw new ResourceException("Only active action reasons can be inactivated");
         }
@@ -230,12 +286,15 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
         actionReason.setStatus(Status.INACTIVE);
         actionReason.setEffectiveEndDate(LocalDate.now());
-        actionReason.setModifiedBy(request.getActorId().trim());
+        actionReason.setModifiedBy(request.getMakerId().trim());
         actionReason.setModifiedDate(LocalDate.now());
         actionReason.setCurrentAssignee(null);
+        if (!isBlank(request.getRemarks())) {
+            actionReason.setRemarks(trimToNull(request.getRemarks()));
+        }
 
         ActionReason saved = actionReasonRepository.save(actionReason);
-        saveHistory(saved, HistoryActionType.INACTIVATED, request.getActorId().trim());
+        saveHistory(saved, HistoryActionType.INACTIVATED, request.getMakerId().trim());
         return toResponse(saved);
     }
 
@@ -251,8 +310,34 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ActionReasonResponse> makerView(ViewRequest request) {
+        return actionReasonRepository.findAll().stream()
+                .filter(actionReason -> request.getUserId() == null
+                        || request.getUserId().equalsIgnoreCase(actionReason.getCreatedBy()))
+                .filter(actionReason -> matchesSearchKey(actionReason, request.getSearchKey()))
+                .sorted(Comparator.comparing(ActionReason::getId).reversed())
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ActionReasonResponse> checkerView(ViewRequest request) {
+        return actionReasonRepository.findAll().stream()
+                .filter(actionReason -> request.getUserId() == null
+                        || request.getUserId().equalsIgnoreCase(actionReason.getCurrentAssignee())
+                        || trayRepository.findByActionReasonId(actionReason.getId()).stream()
+                        .anyMatch(tray -> request.getUserId().equalsIgnoreCase(tray.getCheckerId())))
+                .filter(actionReason -> matchesSearchKey(actionReason, request.getSearchKey()))
+                .sorted(Comparator.comparing(ActionReason::getId).reversed())
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ActionReasonHistory> history(HistoryRequest request) {
-        ActionReason actionReason = getActionReason(request.getActionReasonId());
+        ActionReason actionReason = getLatestByCode(request.getActionReasonCode());
         List<Long> versionIds = actionReasonRepository.findByActionReasonRefId(actionReason.getActionReasonRefId()).stream()
                 .map(ActionReason::getId)
                 .toList();
@@ -280,9 +365,38 @@ public class ActionReasonServiceImpl implements ActionReasonService {
                 .toList();
     }
 
-    private ActionReason getActionReason(Long id) {
-        return actionReasonRepository.findById(id)
+    private ActionReason getActionReason(String code, Integer versionNumber) {
+        return actionReasonRepository.findByActionReasonCodeIgnoreCaseAndVersion(code.trim(), versionNumber)
                 .orElseThrow(() -> new ResourceException("Action Reason not found"));
+    }
+
+    private ActionReason getLatestByCode(String code) {
+        return actionReasonRepository.findByActionReasonCodeIgnoreCaseOrderByVersionDesc(code.trim()).stream()
+                .findFirst()
+                .orElseThrow(() -> new ResourceException("Action Reason not found"));
+    }
+
+    private ActionReason getLatestSubmittableByCode(String code) {
+        return actionReasonRepository.findByActionReasonCodeIgnoreCaseOrderByVersionDesc(code.trim()).stream()
+                .filter(actionReason -> actionReason.getStatus() == Status.DRAFT
+                        || actionReason.getStatus() == Status.SENT_BACK
+                        || actionReason.getStatus() == Status.REJECTED)
+                .findFirst()
+                .orElseThrow(() -> new ResourceException("Draft Action Reason not found"));
+    }
+
+    private ActionReason getLatestPendingByCode(String code) {
+        return actionReasonRepository.findTopByActionReasonCodeIgnoreCaseAndStatusOrderByVersionDesc(
+                        code.trim(),
+                        Status.PENDING_APPROVAL)
+                .orElseThrow(() -> new ResourceException("Pending approval Action Reason not found"));
+    }
+
+    private ActionReason getLatestActiveByCode(String code) {
+        return actionReasonRepository.findTopByActionReasonCodeIgnoreCaseAndStatusOrderByVersionDesc(
+                        code.trim(),
+                        Status.ACTIVE)
+                .orElseThrow(() -> new ResourceException("Active Action Reason not found"));
     }
 
     private void validateUniqueName(String name, Long currentId) {
@@ -294,6 +408,9 @@ public class ActionReasonServiceImpl implements ActionReasonService {
     }
 
     private void validateUniqueCode(String code, Long currentId) {
+        if (currentId == null && actionReasonRepository.existsByActionReasonCodeIgnoreCase(code)) {
+            throw new ResourceException("Action Reason Code already exists");
+        }
         actionReasonRepository.findByActionReasonCodeIgnoreCase(code)
                 .filter(existing -> isDifferentLogicalRecord(existing, currentId))
                 .ifPresent(existing -> {
@@ -311,7 +428,8 @@ public class ActionReasonServiceImpl implements ActionReasonService {
         if (currentId == null) {
             return true;
         }
-        ActionReason current = getActionReason(currentId);
+        ActionReason current = actionReasonRepository.findById(currentId)
+                .orElseThrow(() -> new ResourceException("Action Reason not found"));
         Long currentRefId = current.getActionReasonRefId() != null ? current.getActionReasonRefId() : current.getId();
         Long existingRefId = existing.getActionReasonRefId() != null ? existing.getActionReasonRefId() : existing.getId();
         return !existingRefId.equals(currentRefId);
@@ -326,16 +444,16 @@ public class ActionReasonServiceImpl implements ActionReasonService {
         }
     }
 
-    private Module findModule(Long moduleId) {
-        return moduleRepository.findById(moduleId)
+    private Module findModule(String moduleName) {
+        return moduleRepository.findByModuleNameIgnoreCase(moduleName.trim())
                 .orElseThrow(() -> new ResourceException("Module not found"));
     }
 
-    private ModuleMaster findModuleMaster(Long moduleMasterId) {
-        if (moduleMasterId == null) {
+    private ModuleMaster findModuleMaster(String moduleMasterName) {
+        if (moduleMasterName == null || moduleMasterName.isBlank()) {
             return null;
         }
-        return moduleMasterRepository.findById(moduleMasterId)
+        return moduleMasterRepository.findByModuleMasterNameIgnoreCase(moduleMasterName.trim())
                 .orElseThrow(() -> new ResourceException("Module Master not found"));
     }
 
@@ -349,6 +467,35 @@ public class ActionReasonServiceImpl implements ActionReasonService {
                 .filter(value -> !value.isBlank())
                 .distinct()
                 .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private List<String> parseDelimitedValues(String rawValue) {
+        if (isBlank(rawValue)) {
+            return new ArrayList<>();
+        }
+        return java.util.Arrays.stream(rawValue.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private List<String> parseSingleChecker(String checkerId) {
+        if (isBlank(checkerId)) {
+            return new ArrayList<>();
+        }
+        List<String> values = new ArrayList<>();
+        values.add(checkerId.trim());
+        return values;
+    }
+
+    private List<String> parseSingleValue(String rawValue) {
+        if (isBlank(rawValue)) {
+            return new ArrayList<>();
+        }
+        List<String> values = new ArrayList<>();
+        values.add(rawValue.trim());
+        return values;
     }
 
     private String normalizeName(String name) {
@@ -371,6 +518,19 @@ public class ActionReasonServiceImpl implements ActionReasonService {
         return value == null || value.isBlank();
     }
 
+    private boolean matchesSearchKey(ActionReason actionReason, String searchKey) {
+        if (isBlank(searchKey)) {
+            return true;
+        }
+        String normalized = searchKey.trim().toLowerCase();
+        return (actionReason.getActionReasonName() != null
+                && actionReason.getActionReasonName().toLowerCase().contains(normalized))
+                || (actionReason.getActionReasonCode() != null
+                && actionReason.getActionReasonCode().toLowerCase().contains(normalized))
+                || (actionReason.getDescription() != null
+                && actionReason.getDescription().toLowerCase().contains(normalized));
+    }
+
     private int nextVersion(ActionReason actionReason) {
         Long refId = actionReason.getActionReasonRefId() != null ? actionReason.getActionReasonRefId() : actionReason.getId();
         return actionReasonRepository.findByActionReasonRefIdOrderByVersionAsc(refId).stream()
@@ -391,12 +551,20 @@ public class ActionReasonServiceImpl implements ActionReasonService {
             actionReason.setDescription(normalizeDescription(request.getDescription()));
         }
 
+        if (request.getModule() != null && !request.getModule().isBlank()) {
+            actionReason.setModule(findModule(request.getModule()));
+        }
+
+        if (request.getModuleMaster() != null) {
+            actionReason.setModuleMaster(findModuleMaster(request.getModuleMaster()));
+        }
+
         if (request.getEffectiveStartDate() != null) {
             actionReason.setEffectiveStartDate(request.getEffectiveStartDate());
         }
 
-        if (request.getLinkedActions() != null) {
-            actionReason.setLinkedActions(normalizeLinkedActions(request.getLinkedActions()));
+        if (request.getLinkedAction() != null) {
+            actionReason.setLinkedActions(parseSingleValue(request.getLinkedAction()));
         }
 
         if (request.getLinkedToActivePosition() != null) {
@@ -407,8 +575,8 @@ public class ActionReasonServiceImpl implements ActionReasonService {
             actionReason.setRemarks(trimToNull(request.getRemarks()));
         }
 
-        if (request.getModifiedBy() != null && !request.getModifiedBy().isBlank()) {
-            actionReason.setModifiedBy(request.getModifiedBy().trim());
+        if (request.getMakerId() != null && !request.getMakerId().isBlank()) {
+            actionReason.setModifiedBy(request.getMakerId().trim());
         }
     }
 
@@ -433,7 +601,7 @@ public class ActionReasonServiceImpl implements ActionReasonService {
                 .creationDate(activeVersion.getCreationDate())
                 .createdBy(activeVersion.getCreatedBy())
                 .modifiedDate(LocalDate.now())
-                .modifiedBy(trimToNull(request.getModifiedBy()))
+                .modifiedBy(trimToNull(request.getMakerId()))
                 .checkedBy(null)
                 .checkedDate(null)
                 .linkedToActivePosition(activeVersion.getLinkedToActivePosition())
@@ -550,25 +718,42 @@ public class ActionReasonServiceImpl implements ActionReasonService {
     }
 
     private ActionReasonResponse toResponse(ActionReason actionReason) {
+        LocalDateTime claimedAt = null;
+        if (actionReason.getCurrentAssignee() != null) {
+            claimedAt = trayRepository.findByActionReasonIdAndCheckerId(actionReason.getId(), actionReason.getCurrentAssignee())
+                    .map(ActionReasonTray::getClaimedAt)
+                    .orElse(null);
+        }
+
         return ActionReasonResponse.builder()
-                .id(actionReason.getId())
-                .actionReasonRefId(actionReason.getActionReasonRefId())
+                .tenantId(actionReason.getTenantId())
+                .pkId(actionReason.getId())
+                .id(ActionReasonVersionId.builder()
+                        .actionReasonRefId(actionReason.getActionReasonRefId())
+                        .actionReasonCode(actionReason.getActionReasonCode())
+                        .versionNumber(actionReason.getVersion())
+                        .build())
                 .actionReasonName(actionReason.getActionReasonName())
-                .actionReasonCode(actionReason.getActionReasonCode())
                 .description(actionReason.getDescription())
                 .module(actionReason.getModule() != null ? actionReason.getModule().getModuleName() : null)
                 .moduleMaster(actionReason.getModuleMaster() != null
                         ? actionReason.getModuleMaster().getModuleMasterName()
                         : null)
-                .effectiveStartDate(actionReason.getEffectiveStartDate())
-                .effectiveEndDate(actionReason.getEffectiveEndDate())
-                .linkedActions(normalizeLinkedActions(actionReason.getLinkedActions()))
-                .status(actionReason.getStatus())
-                .version(actionReason.getVersion())
+                .linkedAction(normalizeLinkedActions(actionReason.getLinkedActions()).stream().findFirst().orElse(null))
+                .status(actionReason.getStatus() == Status.ACTIVE)
+                .workflowStatus(actionReason.getStatus())
+                .effectiveFrom(actionReason.getEffectiveStartDate())
+                .effectiveTo(actionReason.getEffectiveEndDate())
                 .createdBy(actionReason.getCreatedBy())
-                .modifiedBy(actionReason.getModifiedBy())
+                .createdDate(actionReason.getCreationDate())
+                .updatedBy(actionReason.getModifiedBy())
+                .updatedDate(actionReason.getModifiedDate())
                 .checkedBy(actionReason.getCheckedBy())
-                .currentAssignee(actionReason.getCurrentAssignee())
+                .checkedDate(actionReason.getCheckedDate())
+                .claimedBy(actionReason.getCurrentAssignee())
+                .claimedAt(claimedAt)
+                .remarks(actionReason.getRemarks())
+                .checkerRemarks(actionReason.getCheckerRemarks())
                 .build();
     }
 

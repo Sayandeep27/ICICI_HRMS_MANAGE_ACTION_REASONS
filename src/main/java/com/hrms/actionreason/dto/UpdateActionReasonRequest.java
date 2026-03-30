@@ -1,8 +1,7 @@
 package com.hrms.actionreason.dto;
 
 import java.time.LocalDate;
-import java.util.List;
-
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -12,7 +11,11 @@ import lombok.Data;
 public class UpdateActionReasonRequest {
 
     @NotNull
-    private Long actionReasonId;
+    private Long tenantId;
+
+    @NotBlank
+    @Size(max = 20)
+    private String actionReasonCode;
 
     @Size(max = 20)
     @Pattern(regexp = "^[A-Za-z0-9- ]+$",
@@ -22,15 +25,23 @@ public class UpdateActionReasonRequest {
     @Size(max = 40)
     private String description;
 
+    @Size(max = 40)
+    private String module;
+
+    @Size(max = 40)
+    private String moduleMaster;
+
     private LocalDate effectiveStartDate;
 
-    private List<@Size(max = 30) String> linkedActions;
+    private String linkedAction;
 
     private Boolean linkedToActivePosition;
 
     @Size(max = 100)
     private String remarks;
 
-    private String modifiedBy;
+    private Boolean submit;
+
+    private String makerId;
 
 }

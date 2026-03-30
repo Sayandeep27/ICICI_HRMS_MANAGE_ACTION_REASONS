@@ -36,6 +36,8 @@ public class ActionReason {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private Long tenantId;
+
     @Column(name = "action_reason_ref_id")
     private Long actionReasonRefId;
 

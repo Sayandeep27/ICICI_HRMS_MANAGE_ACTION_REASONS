@@ -8,11 +8,14 @@ import lombok.Data;
 public class ApproveRequest {
 
     @NotNull
-    private Long actionReasonId;
+    private Long tenantId;
+
+    @NotBlank
+    private String actionReasonCode;
 
     @NotBlank
     private String checkerId;
 
-    private String remarks;
+    private String checkerRemarks;
 
 }

@@ -8,13 +8,16 @@ import lombok.Data;
 public class CheckerActionRequest {
 
     @NotNull
-    private Long actionReasonId;
+    private Long tenantId;
+
+    @NotBlank
+    private String actionReasonCode;
 
     @NotBlank
     private String checkerId;
 
     @NotBlank
-    private String remarks;
+    private String checkerRemarks;
 
     private String attachmentReference;
 
