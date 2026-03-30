@@ -1,6 +1,8 @@
 package com.hrms.actionreason.controller;
 
 import com.hrms.actionreason.dto.ApiResponse;
+import com.hrms.actionreason.dto.ActionReasonDropdownRequest;
+import com.hrms.actionreason.dto.ActionReasonRemarkRequest;
 import com.hrms.actionreason.dto.ApproveRequest;
 import com.hrms.actionreason.dto.CheckerActionRequest;
 import com.hrms.actionreason.dto.ClaimRequest;
@@ -16,14 +18,17 @@ import com.hrms.actionreason.service.ActionReasonService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping({"/api/v4/action-reasons", "/api/v1/action-reasons"})
@@ -94,6 +99,42 @@ public class ActionReasonController {
                 HttpStatus.OK,
                 "Action Reason inactivated successfully",
                 service.inactivate(request)));
+    }
+
+    @PostMapping("/dropdown")
+    public ResponseEntity<ApiResponse<?>> dropdown(@RequestBody(required = false) ActionReasonDropdownRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason dropdown fetched successfully",
+                service.dropdown(request == null ? new ActionReasonDropdownRequest() : request)));
+    }
+
+    @PostMapping("/remarks")
+    public ResponseEntity<ApiResponse<?>> addRemark(@Valid @RequestBody ActionReasonRemarkRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason remark saved successfully",
+                service.addRemark(request)));
+    }
+
+    @PostMapping(value = "/remarks/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<?>> uploadRemarkFile(
+            @RequestPart("tenantId") Long tenantId,
+            @RequestPart("actionReasonCode") String actionReasonCode,
+            @RequestPart("actorId") String actorId,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason file uploaded successfully",
+                service.uploadRemarkFile(tenantId, actionReasonCode, actorId, file)));
+    }
+
+    @PostMapping("/remarks/history")
+    public ResponseEntity<ApiResponse<?>> remarkHistory(@Valid @RequestBody HistoryRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason remarks fetched successfully",
+                service.remarkHistory(request)));
     }
 
     @PostMapping("/search")

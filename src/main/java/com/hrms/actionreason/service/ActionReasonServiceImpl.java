@@ -1,5 +1,6 @@
 package com.hrms.actionreason.service;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -8,6 +9,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import com.hrms.actionreason.dto.ActionReasonDropdownRequest;
+import com.hrms.actionreason.dto.ActionReasonRemarkRequest;
+import com.hrms.actionreason.dto.ActionReasonRemarkResponse;
 import com.hrms.actionreason.dto.ActionReasonResponse;
 import com.hrms.actionreason.dto.ActionReasonVersionId;
 import com.hrms.actionreason.dto.ApproveRequest;
@@ -24,6 +28,7 @@ import com.hrms.actionreason.dto.UpdateActionReasonRequest;
 import com.hrms.actionreason.dto.ViewRequest;
 import com.hrms.actionreason.entity.ActionReason;
 import com.hrms.actionreason.entity.ActionReasonHistory;
+import com.hrms.actionreason.entity.ActionReasonRemark;
 import com.hrms.actionreason.entity.ActionReasonTray;
 import com.hrms.actionreason.entity.Module;
 import com.hrms.actionreason.entity.ModuleMaster;
@@ -33,6 +38,7 @@ import com.hrms.actionreason.enums.TrayStatus;
 import com.hrms.actionreason.exception.ResourceException;
 import com.hrms.actionreason.repository.ActionReasonHistoryRepository;
 import com.hrms.actionreason.repository.ActionReasonRepository;
+import com.hrms.actionreason.repository.ActionReasonRemarkRepository;
 import com.hrms.actionreason.repository.ActionReasonTrayRepository;
 import com.hrms.actionreason.repository.ModuleMasterRepository;
 import com.hrms.actionreason.repository.ModuleRepository;
@@ -42,6 +48,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +62,7 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     private final ActionReasonRepository actionReasonRepository;
     private final ActionReasonHistoryRepository historyRepository;
+    private final ActionReasonRemarkRepository remarkRepository;
     private final ActionReasonTrayRepository trayRepository;
     private final ModuleRepository moduleRepository;
     private final ModuleMasterRepository moduleMasterRepository;
@@ -300,6 +313,93 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<String> dropdown(ActionReasonDropdownRequest request) {
+        return actionReasonRepository.findAll().stream()
+                .filter(actionReason -> actionReason.getStatus() == Status.ACTIVE)
+                .sorted(Comparator.comparing(ActionReason::getActionReasonName, String.CASE_INSENSITIVE_ORDER))
+                .map(ActionReason::getActionReasonName)
+                .distinct()
+                .toList();
+    }
+
+    @Override
+    public ActionReasonRemarkResponse addRemark(ActionReasonRemarkRequest request) {
+        if (request.getTenantId() == null) {
+            throw new ResourceException("Tenant id is required");
+        }
+        if (isBlank(request.getActionReasonCode())) {
+            throw new ResourceException("Action Reason Code is required");
+        }
+        if (isBlank(request.getActorId())) {
+            throw new ResourceException("Actor id is required");
+        }
+        if (isBlank(request.getRemarks())) {
+            throw new ResourceException("Remarks are required");
+        }
+
+        ActionReason actionReason = getLatestByCode(request.getActionReasonCode());
+        ActionReasonRemark saved = remarkRepository.save(ActionReasonRemark.builder()
+                .tenantId(request.getTenantId())
+                .actionReasonId(actionReason.getId())
+                .actionReasonCode(actionReason.getActionReasonCode())
+                .versionNumber(actionReason.getVersion())
+                .remarks(trimToNull(request.getRemarks()))
+                .actorId(request.getActorId().trim())
+                .createdAt(LocalDateTime.now())
+                .build());
+        return toRemarkResponse(saved);
+    }
+
+    @Override
+    public ActionReasonRemarkResponse uploadRemarkFile(
+            Long tenantId,
+            String actionReasonCode,
+            String actorId,
+            MultipartFile file) {
+
+        if (tenantId == null) {
+            throw new ResourceException("Tenant id is required");
+        }
+        if (isBlank(actionReasonCode)) {
+            throw new ResourceException("Action Reason Code is required");
+        }
+        if (isBlank(actorId)) {
+            throw new ResourceException("Actor id is required");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new ResourceException("File is required");
+        }
+
+        ActionReason actionReason = getLatestByCode(actionReasonCode);
+        validateAttachment(file);
+
+        String storedPath = storeAttachment(actionReason.getActionReasonCode(), file);
+        ActionReasonRemark saved = remarkRepository.save(ActionReasonRemark.builder()
+                .tenantId(tenantId)
+                .actionReasonId(actionReason.getId())
+                .actionReasonCode(actionReason.getActionReasonCode())
+                .versionNumber(actionReason.getVersion())
+                .actorId(actorId.trim())
+                .fileName(file.getOriginalFilename())
+                .fileType(file.getContentType())
+                .fileSize(file.getSize())
+                .filePath(storedPath)
+                .createdAt(LocalDateTime.now())
+                .build());
+        return toRemarkResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ActionReasonRemarkResponse> remarkHistory(HistoryRequest request) {
+        getLatestByCode(request.getActionReasonCode());
+        return remarkRepository.findByActionReasonCodeIgnoreCaseOrderByCreatedAtDesc(request.getActionReasonCode().trim()).stream()
+                .map(this::toRemarkResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ActionReasonResponse> search(SearchRequest request) {
         Specification<ActionReason> specification = ActionReasonSpecification.search(request);
         return actionReasonRepository.findAll(specification).stream()
@@ -504,6 +604,38 @@ public class ActionReasonServiceImpl implements ActionReasonService {
 
     private String normalizeDescription(String description) {
         return trimToNull(description) == null ? null : CodeGeneratorUtil.toTitleCase(description);
+    }
+
+    private void validateAttachment(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return;
+        }
+        long maxSize = 2L * 1024 * 1024;
+        if (file.getSize() > maxSize) {
+            throw new ResourceException("Attachment size cannot exceed 2MB");
+        }
+        String originalName = file.getOriginalFilename();
+        String extension = originalName != null && originalName.contains(".")
+                ? originalName.substring(originalName.lastIndexOf('.') + 1).toLowerCase()
+                : "";
+        if (!List.of("png", "jpg", "jpeg", "pdf").contains(extension)) {
+            throw new ResourceException("Only png, jpg, jpeg and pdf files are allowed");
+        }
+    }
+
+    private String storeAttachment(String actionReasonCode, MultipartFile file) {
+        try {
+            Path uploadDir = Paths.get("e:\\ICICI_HRMS_ACTION_REASON_MANAGE\\actionreason\\uploads\\action-reason-remarks",
+                    actionReasonCode);
+            Files.createDirectories(uploadDir);
+            String originalName = file.getOriginalFilename() == null ? "attachment" : file.getOriginalFilename();
+            String storedName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^A-Za-z0-9._-]", "_");
+            Path target = uploadDir.resolve(storedName);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            return target.toString();
+        } catch (IOException exception) {
+            throw new ResourceException("Failed to store attachment");
+        }
     }
 
     private String trimToNull(String value) {
@@ -715,6 +847,21 @@ public class ActionReasonServiceImpl implements ActionReasonService {
                 .build();
 
         historyRepository.save(history);
+    }
+
+    private ActionReasonRemarkResponse toRemarkResponse(ActionReasonRemark remark) {
+        return ActionReasonRemarkResponse.builder()
+                .id(remark.getId())
+                .tenantId(remark.getTenantId())
+                .actionReasonCode(remark.getActionReasonCode())
+                .versionNumber(remark.getVersionNumber())
+                .remarks(remark.getRemarks())
+                .actorId(remark.getActorId())
+                .fileName(remark.getFileName())
+                .fileType(remark.getFileType())
+                .fileSize(remark.getFileSize())
+                .createdAt(remark.getCreatedAt())
+                .build();
     }
 
     private ActionReasonResponse toResponse(ActionReason actionReason) {

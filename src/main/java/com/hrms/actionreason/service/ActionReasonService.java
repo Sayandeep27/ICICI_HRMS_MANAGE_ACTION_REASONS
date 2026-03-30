@@ -2,6 +2,11 @@ package com.hrms.actionreason.service;
 
 import java.util.List;
 
+import org.springframework.web.multipart.MultipartFile;
+
+import com.hrms.actionreason.dto.ActionReasonDropdownRequest;
+import com.hrms.actionreason.dto.ActionReasonRemarkRequest;
+import com.hrms.actionreason.dto.ActionReasonRemarkResponse;
 import com.hrms.actionreason.dto.ActionReasonResponse;
 import com.hrms.actionreason.dto.ApproveRequest;
 import com.hrms.actionreason.dto.CheckerActionRequest;
@@ -33,6 +38,18 @@ public interface ActionReasonService {
     ActionReasonResponse sendBack(PushBackRequest request);
 
     ActionReasonResponse inactivate(InactivateActionReasonRequest request);
+
+    List<String> dropdown(ActionReasonDropdownRequest request);
+
+    ActionReasonRemarkResponse addRemark(ActionReasonRemarkRequest request);
+
+    ActionReasonRemarkResponse uploadRemarkFile(
+            Long tenantId,
+            String actionReasonCode,
+            String actorId,
+            MultipartFile file);
+
+    List<ActionReasonRemarkResponse> remarkHistory(HistoryRequest request);
 
     List<ActionReasonResponse> search(SearchRequest request);
 
