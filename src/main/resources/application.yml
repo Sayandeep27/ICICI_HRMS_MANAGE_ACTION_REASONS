@@ -1,15 +1,15 @@
 spring:
   datasource:
-    url: jdbc:sqlserver://localhost:1433;databaseName=hrms_v4;encrypt=true;trustServerCertificate=true
-    username: hrms_user
-    password: hrms123
-    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    url: ${DB_URL:jdbc:oracle:thin:@localhost:1521/FREEPDB1}
+    username: ${DB_USERNAME:hrms_user}
+    password: ${DB_PASSWORD:hrms123}
+    driver-class-name: ${DB_DRIVER:oracle.jdbc.OracleDriver}
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${DDL_AUTO:update}
     show-sql: true
-    database-platform: org.hibernate.dialect.SQLServerDialect
+    database-platform: ${HIBERNATE_DIALECT:org.hibernate.dialect.OracleDialect}
 
 server:
   port: 8080

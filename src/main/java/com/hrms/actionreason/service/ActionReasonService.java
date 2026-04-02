@@ -8,10 +8,13 @@ import com.hrms.actionreason.dto.ActionReasonDropdownRequest;
 import com.hrms.actionreason.dto.ActionReasonRemarkRequest;
 import com.hrms.actionreason.dto.ActionReasonRemarkResponse;
 import com.hrms.actionreason.dto.ActionReasonResponse;
+import com.hrms.actionreason.dto.ActionReasonViewResponse;
 import com.hrms.actionreason.dto.ApproveRequest;
 import com.hrms.actionreason.dto.CheckerActionRequest;
 import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
+import com.hrms.actionreason.dto.DropdownRequest;
+import com.hrms.actionreason.dto.DropdownValueResponse;
 import com.hrms.actionreason.dto.HistoryRequest;
 import com.hrms.actionreason.dto.InactivateActionReasonRequest;
 import com.hrms.actionreason.dto.PushBackRequest;
@@ -41,6 +44,12 @@ public interface ActionReasonService {
 
     List<String> dropdown(ActionReasonDropdownRequest request);
 
+    List<DropdownValueResponse> moduleDropdown(DropdownRequest request);
+
+    List<DropdownValueResponse> moduleMasterDropdown(DropdownRequest request);
+
+    List<DropdownValueResponse> linkedActionReasonDropdown(DropdownRequest request);
+
     ActionReasonRemarkResponse addRemark(ActionReasonRemarkRequest request);
 
     ActionReasonRemarkResponse uploadRemarkFile(
@@ -50,6 +59,8 @@ public interface ActionReasonService {
             MultipartFile file);
 
     List<ActionReasonRemarkResponse> remarkHistory(HistoryRequest request);
+
+    ActionReasonViewResponse view(HistoryRequest request);
 
     List<ActionReasonResponse> search(SearchRequest request);
 

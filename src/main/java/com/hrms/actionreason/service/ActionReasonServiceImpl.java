@@ -13,11 +13,15 @@ import com.hrms.actionreason.dto.ActionReasonDropdownRequest;
 import com.hrms.actionreason.dto.ActionReasonRemarkRequest;
 import com.hrms.actionreason.dto.ActionReasonRemarkResponse;
 import com.hrms.actionreason.dto.ActionReasonResponse;
+import com.hrms.actionreason.dto.ActionReasonViewHistoryItem;
+import com.hrms.actionreason.dto.ActionReasonViewResponse;
 import com.hrms.actionreason.dto.ActionReasonVersionId;
 import com.hrms.actionreason.dto.ApproveRequest;
 import com.hrms.actionreason.dto.CheckerActionRequest;
 import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
+import com.hrms.actionreason.dto.DropdownRequest;
+import com.hrms.actionreason.dto.DropdownValueResponse;
 import com.hrms.actionreason.dto.HistoryRequest;
 import com.hrms.actionreason.dto.InactivateActionReasonRequest;
 import com.hrms.actionreason.dto.PushBackRequest;
@@ -323,6 +327,60 @@ public class ActionReasonServiceImpl implements ActionReasonService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<DropdownValueResponse> moduleDropdown(DropdownRequest request) {
+        DropdownRequest safeRequest = request == null ? new DropdownRequest() : request;
+        return moduleRepository.findAll().stream()
+                .filter(module -> isBlank(safeRequest.getActionCode())
+                        || CodeGeneratorUtil.generateCode(module.getModuleName())
+                        .contains(CodeGeneratorUtil.generateCode(safeRequest.getActionCode())))
+                .sorted(Comparator.comparing(Module::getModuleName, String.CASE_INSENSITIVE_ORDER))
+                .map(module -> DropdownValueResponse.builder()
+                        .id(module.getId())
+                        .code(CodeGeneratorUtil.generateCode(module.getModuleName()))
+                        .name(module.getModuleName())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DropdownValueResponse> moduleMasterDropdown(DropdownRequest request) {
+        DropdownRequest safeRequest = request == null ? new DropdownRequest() : request;
+        return moduleMasterRepository.findAll().stream()
+                .filter(moduleMaster -> isBlank(safeRequest.getActionCode())
+                        || CodeGeneratorUtil.generateCode(moduleMaster.getModuleMasterName())
+                        .contains(CodeGeneratorUtil.generateCode(safeRequest.getActionCode())))
+                .sorted(Comparator.comparing(ModuleMaster::getModuleMasterName, String.CASE_INSENSITIVE_ORDER))
+                .map(moduleMaster -> DropdownValueResponse.builder()
+                        .id(moduleMaster.getId())
+                        .code(CodeGeneratorUtil.generateCode(moduleMaster.getModuleMasterName()))
+                        .name(moduleMaster.getModuleMasterName())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DropdownValueResponse> linkedActionReasonDropdown(DropdownRequest request) {
+        DropdownRequest safeRequest = request == null ? new DropdownRequest() : request;
+        return actionReasonRepository.findAll().stream()
+                .filter(actionReason -> actionReason.getStatus() == Status.ACTIVE)
+                .filter(actionReason -> safeRequest.getTenantId() == null
+                        || Objects.equals(actionReason.getTenantId(), safeRequest.getTenantId()))
+                .filter(actionReason -> isBlank(safeRequest.getActionCode())
+                        || actionReason.getActionReasonCode().toLowerCase()
+                        .contains(safeRequest.getActionCode().trim().toLowerCase()))
+                .sorted(Comparator.comparing(ActionReason::getActionReasonName, String.CASE_INSENSITIVE_ORDER))
+                .map(actionReason -> DropdownValueResponse.builder()
+                        .id(actionReason.getId())
+                        .code(actionReason.getActionReasonCode())
+                        .name(actionReason.getActionReasonName())
+                        .build())
+                .toList();
+    }
+
+    @Override
     public ActionReasonRemarkResponse addRemark(ActionReasonRemarkRequest request) {
         if (request.getTenantId() == null) {
             throw new ResourceException("Tenant id is required");
@@ -396,6 +454,63 @@ public class ActionReasonServiceImpl implements ActionReasonService {
         return remarkRepository.findByActionReasonCodeIgnoreCaseOrderByCreatedAtDesc(request.getActionReasonCode().trim()).stream()
                 .map(this::toRemarkResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ActionReasonViewResponse view(HistoryRequest request) {
+        ActionReason actionReason = getLatestByCode(request.getActionReasonCode());
+        List<Long> versionIds = actionReasonRepository.findByActionReasonRefId(actionReason.getActionReasonRefId()).stream()
+                .map(ActionReason::getId)
+                .toList();
+
+        List<ActionReasonViewHistoryItem> actionHistory = historyRepository
+                .findByActionReasonIdInOrderByVersionDescIdDesc(versionIds).stream()
+                .map(history -> ActionReasonViewHistoryItem.builder()
+                        .dateTime(history.getActionedAt())
+                        .actionBy(history.getActorId())
+                        .action(mapHistoryAction(history.getActionType()))
+                        .remarks(resolveHistoryRemarks(history))
+                        .attachment(null)
+                        .build())
+                .toList();
+
+        List<ActionReasonViewHistoryItem> remarkHistory = remarkRepository
+                .findByActionReasonCodeIgnoreCaseOrderByCreatedAtDesc(request.getActionReasonCode().trim()).stream()
+                .map(remark -> ActionReasonViewHistoryItem.builder()
+                        .dateTime(remark.getCreatedAt())
+                        .actionBy(remark.getActorId())
+                        .action(remark.getFileName() != null ? "Attachment Added" : "Remark Added")
+                        .remarks(remark.getRemarks())
+                        .attachment(remark.getFileName())
+                        .build())
+                .toList();
+
+        List<ActionReasonViewHistoryItem> mergedHistory = new ArrayList<>();
+        mergedHistory.addAll(actionHistory);
+        mergedHistory.addAll(remarkHistory);
+        mergedHistory.sort(Comparator.comparing(ActionReasonViewHistoryItem::getDateTime,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        return ActionReasonViewResponse.builder()
+                .tenantId(actionReason.getTenantId())
+                .actionReasonName(actionReason.getActionReasonName())
+                .actionReasonCode(actionReason.getActionReasonCode())
+                .description(actionReason.getDescription())
+                .module(actionReason.getModule() != null ? actionReason.getModule().getModuleName() : null)
+                .moduleMaster(actionReason.getModuleMaster() != null
+                        ? actionReason.getModuleMaster().getModuleMasterName()
+                        : null)
+                .linkedAction(normalizeLinkedActions(actionReason.getLinkedActions()).stream().findFirst().orElse(null))
+                .effectiveFrom(actionReason.getEffectiveStartDate())
+                .effectiveTo(actionReason.getEffectiveEndDate())
+                .active(actionReason.getStatus() == Status.ACTIVE)
+                .workflowStatus(actionReason.getStatus().name())
+                .createdDate(actionReason.getCreationDate())
+                .createdBy(actionReason.getCreatedBy())
+                .versionNumber(actionReason.getVersion())
+                .remarksHistory(mergedHistory)
+                .build();
     }
 
     @Override
@@ -847,6 +962,35 @@ public class ActionReasonServiceImpl implements ActionReasonService {
                 .build();
 
         historyRepository.save(history);
+    }
+
+    private String mapHistoryAction(HistoryActionType actionType) {
+        if (actionType == null) {
+            return null;
+        }
+        return switch (actionType) {
+            case CREATED -> "Create";
+            case UPDATED -> "Update";
+            case SUBMITTED -> "Submit";
+            case CLAIMED -> "Claim";
+            case APPROVED -> "Approve";
+            case REJECTED -> "Reject";
+            case SENT_BACK -> "Send Back";
+            case INACTIVATED -> "Inactivate";
+        };
+    }
+
+    private String resolveHistoryRemarks(ActionReasonHistory history) {
+        if (history == null) {
+            return null;
+        }
+        if (!isBlank(history.getCheckerRemarks())) {
+            return history.getCheckerRemarks();
+        }
+        if (!isBlank(history.getMakerReplyRemarks())) {
+            return history.getMakerReplyRemarks();
+        }
+        return history.getRemarks();
     }
 
     private ActionReasonRemarkResponse toRemarkResponse(ActionReasonRemark remark) {

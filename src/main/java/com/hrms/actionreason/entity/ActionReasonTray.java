@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,7 +27,8 @@ import lombok.Setter;
 public class ActionReasonTray {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "action_reason_tray_seq_gen")
+    @SequenceGenerator(name = "action_reason_tray_seq_gen", sequenceName = "ACTION_REASON_TRAY_SEQ", allocationSize = 1)
     private Long id;
 
     private Long actionReasonId;

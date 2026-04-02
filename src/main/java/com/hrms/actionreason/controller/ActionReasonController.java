@@ -7,6 +7,7 @@ import com.hrms.actionreason.dto.ApproveRequest;
 import com.hrms.actionreason.dto.CheckerActionRequest;
 import com.hrms.actionreason.dto.ClaimRequest;
 import com.hrms.actionreason.dto.CreateActionReasonRequest;
+import com.hrms.actionreason.dto.DropdownRequest;
 import com.hrms.actionreason.dto.HistoryRequest;
 import com.hrms.actionreason.dto.InactivateActionReasonRequest;
 import com.hrms.actionreason.dto.PushBackRequest;
@@ -109,6 +110,30 @@ public class ActionReasonController {
                 service.dropdown(request == null ? new ActionReasonDropdownRequest() : request)));
     }
 
+    @PostMapping("/dropdown/modules")
+    public ResponseEntity<ApiResponse<?>> moduleDropdown(@RequestBody(required = false) DropdownRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Module dropdown fetched successfully",
+                service.moduleDropdown(request == null ? new DropdownRequest() : request)));
+    }
+
+    @PostMapping("/dropdown/module-masters")
+    public ResponseEntity<ApiResponse<?>> moduleMasterDropdown(@RequestBody(required = false) DropdownRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Module Master dropdown fetched successfully",
+                service.moduleMasterDropdown(request == null ? new DropdownRequest() : request)));
+    }
+
+    @PostMapping("/dropdown/linked-action-reasons")
+    public ResponseEntity<ApiResponse<?>> linkedActionReasonDropdown(@RequestBody(required = false) DropdownRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Linked Action Reason dropdown fetched successfully",
+                service.linkedActionReasonDropdown(request == null ? new DropdownRequest() : request)));
+    }
+
     @PostMapping("/remarks")
     public ResponseEntity<ApiResponse<?>> addRemark(@Valid @RequestBody ActionReasonRemarkRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -135,6 +160,14 @@ public class ActionReasonController {
                 HttpStatus.OK,
                 "Action Reason remarks fetched successfully",
                 service.remarkHistory(request)));
+    }
+
+    @PostMapping("/view")
+    public ResponseEntity<ApiResponse<?>> view(@Valid @RequestBody HistoryRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                HttpStatus.OK,
+                "Action Reason view fetched successfully",
+                service.view(request)));
     }
 
     @PostMapping("/search")
